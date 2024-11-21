@@ -31,6 +31,8 @@ This repository demonstrates how to:
 **Given:**
 1. A set of 3D boxes, defined by their minimum and maximum corners (`x_min, y_min, z_min` and `x_max, y_max, z_max`).
 2. A viewer position defined in 3D space (`x, y, z`).
+3. 
+![Example Image](/blendVis.png)
 
 **Determine:**
 - Which faces of each box are **visible** or **obstructed** when viewed from the given position.
