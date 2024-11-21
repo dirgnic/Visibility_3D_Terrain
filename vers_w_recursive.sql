@@ -19,7 +19,7 @@ CREATE TABLE viewer_position (
 );
 
 DROP TABLE viewer_position;
--- Insert example boxes (grid-like terrain)
+-- insert example boxes (grid-like terrain)
 INSERT INTO boxes (x_min, y_min, z_min, x_max, y_max, z_max)
 VALUES
     (0, 0, 0, 1, 1, 1),
@@ -27,12 +27,12 @@ VALUES
     (0, 1, 0, 1, 2, 3),
     (1, 1, 0, 2, 2, 1);
 
--- Insert viewer position
+-- insert viewer position
 INSERT INTO viewer_position (x, y, z, point)
 VALUES (3, 3, 5, ST_SetSRID(ST_MakePoint(3, 3, 5), 4326));
 
 WITH RECURSIVE box_faces AS (
-    -- Step 1: Generate six faces for each box
+    -- generate six faces for each box
     SELECT
         id AS box_id,
         'front' AS face,
@@ -100,7 +100,7 @@ WITH RECURSIVE box_faces AS (
     FROM boxes
 ),
 face_angles AS (
-    -- Step 2: Calculate distances and angles for each face
+    -- step 2: calculate distances and angles for each face
     SELECT
         bf.box_id,
         bf.face,
@@ -137,7 +137,7 @@ face_angles AS (
     CROSS JOIN viewer_position vp
 ),
 ordered_faces AS (
-    -- Step 3: Order faces by distance
+    -- step 3: order faces by distance
     SELECT
         fa.box_id,
         fa.face,
@@ -151,7 +151,7 @@ ordered_faces AS (
     FROM face_angles fa
 ),
 recursive_visibility AS (
-    -- Base case: Start with the first face
+    -- base case: start with the first face
     SELECT
         of.box_id,
         of.face,
@@ -165,11 +165,11 @@ recursive_visibility AS (
         of.viewer_z,
         TRUE AS visible
     FROM ordered_faces of
-    WHERE of.row_num = 1 -- Start with the closest face
+    WHERE of.row_num = 1 -- start with the closest face
 
     UNION ALL
 
-    -- Recursive case: Process the next face in order
+    -- recursive case: process the next face in order
     SELECT
         of.box_id,
         of.face,
@@ -182,14 +182,14 @@ recursive_visibility AS (
         of.viewer_y,
         of.viewer_z,
         CASE
-            WHEN of.angle > rv.max_angle THEN TRUE -- Visible if angle exceeds max_angle
+            WHEN of.angle > rv.max_angle THEN TRUE -- visible if angle exceeds max_angle
             ELSE FALSE
         END AS visible
     FROM ordered_faces of
     JOIN recursive_visibility rv
-        ON of.row_num = rv.row_num + 1 -- Process faces in sequence
+        ON of.row_num = rv.row_num + 1 --  faces in sequence
 )
--- Final output
+-- output
 SELECT DISTINCT
     box_id,
     face,
