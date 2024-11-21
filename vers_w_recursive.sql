@@ -31,82 +31,99 @@ VALUES
 INSERT INTO viewer_position (x, y, z, point)
 VALUES (3, 3, 5, ST_SetSRID(ST_MakePoint(3, 3, 5), 4326));
 
-WITH RECURSIVE box_faces AS (
-    -- generate six faces for each box
+WITH RECURSIVE next_box AS (
+    -- Base case: Start with the first box
     SELECT
         id AS box_id,
+        x_min, y_min, z_min, x_max, y_max, z_max
+    FROM boxes
+    WHERE id = (SELECT MIN(id) FROM boxes)
+
+    UNION ALL
+
+    -- Recursive case: Move to the next box
+    SELECT
+        b.id AS box_id,
+        b.x_min, b.y_min, b.z_min, b.x_max, b.y_max, b.z_max
+    FROM next_box nb
+    JOIN boxes b ON b.id > nb.box_id -- Move to the next box
+),
+box_faces AS (
+    -- Generate all faces for each box from the recursive result
+    SELECT
+        nb.box_id,
         'front' AS face,
         ARRAY[
-            x_min, y_max, z_min,
-            x_max, y_max, z_min,
-            x_max, y_max, z_max,
-            x_min, y_max, z_max
+            nb.x_min, nb.y_max, nb.z_min,
+            nb.x_max, nb.y_max, nb.z_min,
+            nb.x_max, nb.y_max, nb.z_max,
+            nb.x_min, nb.y_max, nb.z_max
         ] AS vertices
-    FROM boxes
+    FROM next_box nb
     UNION ALL
     SELECT
-        id AS box_id,
+        nb.box_id,
         'back' AS face,
         ARRAY[
-            x_min, y_min, z_min,
-            x_max, y_min, z_min,
-            x_max, y_min, z_max,
-            x_min, y_min, z_max
+            nb.x_min, nb.y_min, nb.z_min,
+            nb.x_max, nb.y_min, nb.z_min,
+            nb.x_max, nb.y_min, nb.z_max,
+            nb.x_min, nb.y_min, nb.z_max
         ] AS vertices
-    FROM boxes
+    FROM next_box nb
     UNION ALL
     SELECT
-        id AS box_id,
+        nb.box_id,
         'left' AS face,
         ARRAY[
-            x_min, y_min, z_min,
-            x_min, y_max, z_min,
-            x_min, y_max, z_max,
-            x_min, y_min, z_max
+            nb.x_min, nb.y_min, nb.z_min,
+            nb.x_min, nb.y_max, nb.z_min,
+            nb.x_min, nb.y_max, nb.z_max,
+            nb.x_min, nb.y_min, nb.z_max
         ] AS vertices
-    FROM boxes
+    FROM next_box nb
     UNION ALL
     SELECT
-        id AS box_id,
+        nb.box_id,
         'right' AS face,
         ARRAY[
-            x_max, y_min, z_min,
-            x_max, y_max, z_min,
-            x_max, y_max, z_max,
-            x_max, y_min, z_max
+            nb.x_max, nb.y_min, nb.z_min,
+            nb.x_max, nb.y_max, nb.z_min,
+            nb.x_max, nb.y_max, nb.z_max,
+            nb.x_max, nb.y_min, nb.z_max
         ] AS vertices
-    FROM boxes
+    FROM next_box nb
     UNION ALL
     SELECT
-        id AS box_id,
+        nb.box_id,
         'top' AS face,
         ARRAY[
-            x_min, y_min, z_max,
-            x_max, y_min, z_max,
-            x_max, y_max, z_max,
-            x_min, y_max, z_max
+            nb.x_min, nb.y_min, nb.z_max,
+            nb.x_max, nb.y_min, nb.z_max,
+            nb.x_max, nb.y_max, nb.z_max,
+            nb.x_min, nb.y_max, nb.z_max
         ] AS vertices
-    FROM boxes
+    FROM next_box nb
     UNION ALL
     SELECT
-        id AS box_id,
+        nb.box_id,
         'bottom' AS face,
         ARRAY[
-            x_min, y_min, z_min,
-            x_max, y_min, z_min,
-            x_max, y_max, z_min,
-            x_min, y_max, z_min
+            nb.x_min, nb.y_min, nb.z_min,
+            nb.x_max, nb.y_min, nb.z_min,
+            nb.x_max, nb.y_max, nb.z_min,
+            nb.x_min, nb.y_max, nb.z_min
         ] AS vertices
-    FROM boxes
+    FROM next_box nb
 ),
 face_angles AS (
-    -- step 2: calculate distances and angles for each face
+    -- calc distances and angles for each face
     SELECT
         bf.box_id,
         bf.face,
         bf.vertices,
         ST_Distance(
-            ST_SetSRID(vp.point, 4326),
+            ST_SetSRID(vp.point, 4326), -- =viewer position has SRID 4326 for 3D
             ST_SetSRID(
                 ST_MakePoint(
                     (bf.vertices[1] + bf.vertices[4] + bf.vertices[7] + bf.vertices[10]) / 4,
@@ -129,67 +146,104 @@ face_angles AS (
                     4326
                 )
             )
-        ) AS angle,
-        vp.x AS viewer_x,
-        vp.y AS viewer_y,
-        vp.z AS viewer_z
+        ) AS angle
     FROM box_faces bf
     CROSS JOIN viewer_position vp
 ),
-ordered_faces AS (
-    -- step 3: order faces by distance
-    SELECT
+visible_faces AS (
+    -- det visibility and eliminate duplicates
+    SELECT DISTINCT
         fa.box_id,
         fa.face,
         fa.vertices,
-        fa.distance_2d,
-        fa.angle,
-        fa.viewer_x,
-        fa.viewer_y,
-        fa.viewer_z,
-        ROW_NUMBER() OVER (ORDER BY fa.distance_2d) AS row_num
+        NOT EXISTS (
+            SELECT 1
+            FROM face_angles fa2
+            WHERE
+                fa2.box_id != fa.box_id -- obstructing face belongs to different box
+                AND fa2.angle > fa.angle -- obstructing face has a higher angle
+                AND ST_Distance(
+                    ST_SetSRID(vp.point, 4326),
+                    ST_SetSRID(
+                        ST_MakePoint(
+                            (fa2.vertices[1] + fa2.vertices[4] + fa2.vertices[7] + fa2.vertices[10]) / 4,
+                            (fa2.vertices[2] + fa2.vertices[5] + fa2.vertices[8] + fa2.vertices[11]) / 4,
+                            (fa2.vertices[3] + fa2.vertices[6] + fa2.vertices[9] + fa2.vertices[12]) / 4
+                        ),
+                        4326
+                    )
+                ) <
+                ST_Distance(
+                    ST_SetSRID(vp.point, 4326),
+                    ST_SetSRID(
+                        ST_MakePoint(
+                            (fa.vertices[1] + fa.vertices[4] + fa.vertices[7] + fa.vertices[10]) / 4,
+                            (fa.vertices[2] + fa.vertices[5] + fa.vertices[8] + fa.vertices[11]) / 4,
+                            (fa.vertices[3] + fa.vertices[6] + fa.vertices[9] + fa.vertices[12]) / 4
+                        ),
+                        4326
+                    )
+                ) -- Obstructing face is closer
+        ) AND NOT EXISTS (
+            -- additional condition: check line-of-sight obstr for higher angle faces
+            SELECT 1
+            FROM face_angles fa3
+            WHERE
+                fa3.angle > fa.angle -- face has a higher angle
+              AND ST_Distance(
+                    ST_SetSRID(vp.point, 4326),
+                    ST_SetSRID(
+                        ST_MakePoint(
+                            (fa3.vertices[1] + fa3.vertices[4] + fa3.vertices[7] + fa3.vertices[10]) / 4,
+                            (fa3.vertices[2] + fa3.vertices[5] + fa3.vertices[8] + fa3.vertices[11]) / 4,
+                            (fa3.vertices[3] + fa3.vertices[6] + fa3.vertices[9] + fa3.vertices[12]) / 4
+                        ),
+                        4326
+                    )
+                ) <=
+                ST_Distance(
+                    ST_SetSRID(vp.point, 4326),
+                    ST_SetSRID(
+                        ST_MakePoint(
+                            (fa.vertices[1] + fa.vertices[4] + fa.vertices[7] + fa.vertices[10]) / 4,
+                            (fa.vertices[2] + fa.vertices[5] + fa.vertices[8] + fa.vertices[11]) / 4,
+                            (fa.vertices[3] + fa.vertices[6] + fa.vertices[9] + fa.vertices[12]) / 4
+                        ),
+                        4326
+                    )
+                ) -- Obstructing face is closer
+                AND ST_Intersects( -- Check line-of-sight intersection
+                    ST_MakeLine(
+                        ST_SetSRID(ST_MakePoint(vp.x, vp.y, vp.z), 4326), -- Viewer position
+                        ST_SetSRID(
+                            ST_MakePoint(
+                                (fa.vertices[1] + fa.vertices[4] + fa.vertices[7] + fa.vertices[10]) / 4,
+                                (fa.vertices[2] + fa.vertices[5] + fa.vertices[8] + fa.vertices[11]) / 4,
+                                (fa.vertices[3] + fa.vertices[6] + fa.vertices[9] + fa.vertices[12]) / 4
+                            ),
+                            4326
+                        )
+                    ),
+                    ST_SetSRID(
+                        ST_MakePolygon(ST_MakeLine(ARRAY[
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[1], fa3.vertices[2], fa3.vertices[3]), 4326),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[4], fa3.vertices[5], fa3.vertices[6]), 4326),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[7], fa3.vertices[8], fa3.vertices[9]), 4326),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[10], fa3.vertices[11], fa3.vertices[12]), 4326),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[1], fa3.vertices[2], fa3.vertices[3]), 4326) -- Close polygon
+                        ])),
+                        4326
+                    )
+                ) -- LOS intersects another face
+
+        ) AS visible
     FROM face_angles fa
-),
-recursive_visibility AS (
-    -- base case: start with the first face
-    SELECT
-        of.box_id,
-        of.face,
-        of.vertices,
-        of.angle,
-        of.distance_2d,
-        of.row_num,
-        of.angle AS max_angle,
-        of.viewer_x,
-        of.viewer_y,
-        of.viewer_z,
-        TRUE AS visible
-    FROM ordered_faces of
-    WHERE of.row_num = 1 -- start with the closest face
+    CROSS JOIN viewer_position vp
 
-    UNION ALL
 
-    -- recursive case: process the next face in order
-    SELECT
-        of.box_id,
-        of.face,
-        of.vertices,
-        of.angle,
-        of.distance_2d,
-        of.row_num,
-        GREATEST(rv.max_angle, of.angle) AS max_angle,
-        of.viewer_x,
-        of.viewer_y,
-        of.viewer_z,
-        CASE
-            WHEN of.angle > rv.max_angle THEN TRUE -- visible if angle exceeds max_angle
-            ELSE FALSE
-        END AS visible
-    FROM ordered_faces of
-    JOIN recursive_visibility rv
-        ON of.row_num = rv.row_num + 1 --  faces in sequence
 )
--- output
+
+-- Final CSV Output for Blender
 SELECT DISTINCT
     box_id,
     face,
@@ -197,9 +251,8 @@ SELECT DISTINCT
     vertices[4] AS x2, vertices[5] AS y2, vertices[6] AS z2,
     vertices[7] AS x3, vertices[8] AS y3, vertices[9] AS z3,
     vertices[10] AS x4, vertices[11] AS y4, vertices[12] AS z4,
-    viewer_x,
-    viewer_y,
-    viewer_z,
+    vp.x AS viewer_x, vp.y AS viewer_y, vp.z AS viewer_z, -- Add viewer position
     visible
-FROM recursive_visibility
+FROM visible_faces
+CROSS JOIN viewer_position vp
 ORDER BY box_id, face;
