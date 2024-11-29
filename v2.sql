@@ -122,27 +122,27 @@ face_angles AS (
         bf.face,
         bf.vertices,
         ST_Distance(
-            ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326),
+            ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979),
             ST_SetSRID(
                 ST_MakePoint(
                     (bf.vertices[1] + bf.vertices[4] + bf.vertices[7] + bf.vertices[10]) / 4,
                     (bf.vertices[2] + bf.vertices[5] + bf.vertices[8] + bf.vertices[11]) / 4,
                     (bf.vertices[3] + bf.vertices[6] + bf.vertices[9] + bf.vertices[12]) / 4
                 ),
-                4326
+                4979
             )
         ) AS distance_2d,
         ATAN2(
             ((bf.vertices[3] + bf.vertices[6] + bf.vertices[9] + bf.vertices[12]) / 4) - :viewer_z,
             ST_Distance(
-                ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326),
+                ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979),
                 ST_SetSRID(
                     ST_MakePoint(
                         (bf.vertices[1] + bf.vertices[4] + bf.vertices[7] + bf.vertices[10]) / 4,
                         (bf.vertices[2] + bf.vertices[5] + bf.vertices[8] + bf.vertices[11]) / 4,
                         (bf.vertices[3] + bf.vertices[6] + bf.vertices[9] + bf.vertices[12]) / 4
                     ),
-                    4326
+                    4979
                 )
             )
         ) AS angle
@@ -161,25 +161,25 @@ visible_faces AS (
                 fa2.box_id != fa.box_id -- obstructing face belongs to different box
                 AND fa2.angle > fa.angle -- obstructing face has a higher angle
                 AND ST_Distance(
-                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326),
+                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979),
                     ST_SetSRID(
                         ST_MakePoint(
                             (fa2.vertices[1] + fa2.vertices[4] + fa2.vertices[7] + fa2.vertices[10]) / 4,
                             (fa2.vertices[2] + fa2.vertices[5] + fa2.vertices[8] + fa2.vertices[11]) / 4,
                             (fa2.vertices[3] + fa2.vertices[6] + fa2.vertices[9] + fa2.vertices[12]) / 4
                         ),
-                        4326
+                        4979
                     )
                 ) <
                 ST_Distance(
-                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326),
+                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979),
                     ST_SetSRID(
                         ST_MakePoint(
                             (fa.vertices[1] + fa.vertices[4] + fa.vertices[7] + fa.vertices[10]) / 4,
                             (fa.vertices[2] + fa.vertices[5] + fa.vertices[8] + fa.vertices[11]) / 4,
                             (fa.vertices[3] + fa.vertices[6] + fa.vertices[9] + fa.vertices[12]) / 4
                         ),
-                        4326
+                        4979
                     )
                 ) -- Obstructing face is closer
         ) AND NOT EXISTS (
@@ -189,48 +189,48 @@ visible_faces AS (
             WHERE
                 fa3.angle > fa.angle -- face has a higher angle
               AND ST_Distance(
-                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326),
+                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979),
                     ST_SetSRID(
                         ST_MakePoint(
                             (fa3.vertices[1] + fa3.vertices[4] + fa3.vertices[7] + fa3.vertices[10]) / 4,
                             (fa3.vertices[2] + fa3.vertices[5] + fa3.vertices[8] + fa3.vertices[11]) / 4,
                             (fa3.vertices[3] + fa3.vertices[6] + fa3.vertices[9] + fa3.vertices[12]) / 4
                         ),
-                        4326
+                        4979
                     )
                 ) <=
                 ST_Distance(
-                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326),
+                    ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979),
                     ST_SetSRID(
                         ST_MakePoint(
                             (fa.vertices[1] + fa.vertices[4] + fa.vertices[7] + fa.vertices[10]) / 4,
                             (fa.vertices[2] + fa.vertices[5] + fa.vertices[8] + fa.vertices[11]) / 4,
                             (fa.vertices[3] + fa.vertices[6] + fa.vertices[9] + fa.vertices[12]) / 4
                         ),
-                        4326
+                        4979
                     )
                 ) -- Obstructing face is closer
                 AND ST_Intersects( -- Check line-of-sight intersection
                     ST_MakeLine(
-                        ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4326), -- Viewer position
+                        ST_SetSRID(ST_MakePoint(:viewer_x, :viewer_y, :viewer_z), 4979), -- Viewer position
                         ST_SetSRID(
                             ST_MakePoint(
                                 (fa.vertices[1] + fa.vertices[4] + fa.vertices[7] + fa.vertices[10]) / 4,
                                 (fa.vertices[2] + fa.vertices[5] + fa.vertices[8] + fa.vertices[11]) / 4,
                                 (fa.vertices[3] + fa.vertices[6] + fa.vertices[9] + fa.vertices[12]) / 4
                             ),
-                            4326
+                            4979
                         )
                     ),
                     ST_SetSRID(
                         ST_MakePolygon(ST_MakeLine(ARRAY[
-                            ST_SetSRID(ST_MakePoint(fa3.vertices[1], fa3.vertices[2], fa3.vertices[3]), 4326),
-                            ST_SetSRID(ST_MakePoint(fa3.vertices[4], fa3.vertices[5], fa3.vertices[6]), 4326),
-                            ST_SetSRID(ST_MakePoint(fa3.vertices[7], fa3.vertices[8], fa3.vertices[9]), 4326),
-                            ST_SetSRID(ST_MakePoint(fa3.vertices[10], fa3.vertices[11], fa3.vertices[12]), 4326),
-                            ST_SetSRID(ST_MakePoint(fa3.vertices[1], fa3.vertices[2], fa3.vertices[3]), 4326) -- Close polygon
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[1], fa3.vertices[2], fa3.vertices[3]), 4979),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[4], fa3.vertices[5], fa3.vertices[6]), 4979),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[7], fa3.vertices[8], fa3.vertices[9]), 4979),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[10], fa3.vertices[11], fa3.vertices[12]), 4979),
+                            ST_SetSRID(ST_MakePoint(fa3.vertices[1], fa3.vertices[2], fa3.vertices[3]), 4979) -- Close polygon
                         ])),
-                        4326
+                        4979
                     )
                 ) -- LOS intersects another face
 
@@ -251,4 +251,3 @@ SELECT
     visible
 FROM visible_faces
 ORDER BY box_id, face;
-
