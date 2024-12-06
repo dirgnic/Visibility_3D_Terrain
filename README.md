@@ -58,4 +58,4 @@ This repository demonstrates how to:
 1. Clone this repository:
    ```bash
    git clone https://github.com/your-username/box-visibility-analysis.git
-   cd box-visibility-analysis
+   cd box-visibility-analysis -- example run using: psql -U postgres -d vis_3D -f "C:\Users\Ingrid\sql_scripts\visuals3D.sql"
