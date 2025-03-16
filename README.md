@@ -1,4 +1,4 @@
-# Box Visibility Analysis0
+# Box Visibility Analysis
 ThiS project implements a 3D visibility determination algorithm using PostgreSQL and PostGIS. The goal is to determine which **faces of 3D boxes** are visible from a given viewer position. The implementation leverages **recursive SQL queries** to calculate visibility based on geometric properties like distance and elevation angle.
 
 ---
